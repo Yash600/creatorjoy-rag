@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a0a;
+  --fg: #ededed;
+  --muted: #888;
+  --border: #1f1f1f;
+  --accent: #ff5e3a;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Citation badge — clickable inline pill rendered by the chat panel */
+.citation {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  margin: 0 2px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(255, 94, 58, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(255, 94, 58, 0.3);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.citation:hover {
+  background: rgba(255, 94, 58, 0.22);
+}
