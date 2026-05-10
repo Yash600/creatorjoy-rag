@@ -107,8 +107,12 @@ async def _resolve_channel_followers(
         if age <= timedelta(seconds=settings.video_cache_ttl_seconds):
             return row["follower_count"]
 
-    # Fetch fresh from yt-dlp
-    info = await asyncio.to_thread(youtube.fetch_channel_info, channel_id)
+    # Fetch fresh — YouTube API first, yt-dlp fallback
+    followers = await asyncio.to_thread(youtube.fetch_channel_followers_ytapi, channel_id)
+    if followers is not None:
+        info = youtube.ChannelInfo(channel_id=channel_id, channel_name="", follower_count=followers)
+    else:
+        info = await asyncio.to_thread(youtube.fetch_channel_info, channel_id)
     if info and info.follower_count is not None:
         await pool.execute(
             """
@@ -259,8 +263,13 @@ async def ingest_video(
         logger.info("cache hit for %s (age within TTL)", video_id)
         return cached
 
-    # 2. Metadata
-    info = await asyncio.to_thread(youtube.fetch_video_info, video_id)
+    # 2. Metadata — YouTube Data API v3 first (no bot risk), yt-dlp fallback
+    try:
+        info = await asyncio.to_thread(youtube.fetch_video_info_ytapi, video_id)
+        logger.info("metadata via YouTube Data API v3 for %s", video_id)
+    except Exception as e:
+        logger.warning("YouTube API failed for %s (%s), falling back to yt-dlp", video_id, e)
+        info = await asyncio.to_thread(youtube.fetch_video_info, video_id)
 
     # Reject videos that are absurdly long for our cost story
     if info.duration_seconds and info.duration_seconds > settings.max_video_duration_seconds:

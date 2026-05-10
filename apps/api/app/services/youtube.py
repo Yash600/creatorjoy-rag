@@ -279,6 +279,111 @@ def _try_extract(
     return None
 
 
+# ─── YouTube Data API v3 (primary metadata path) ─────────────────────────
+
+
+def _parse_iso_duration(s: str | None) -> int | None:
+    """Convert ISO 8601 duration (PT4M33S) to total seconds."""
+    if not s:
+        return None
+    m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", s)
+    if not m:
+        return None
+    h, mn, sec = int(m.group(1) or 0), int(m.group(2) or 0), int(m.group(3) or 0)
+    return h * 3600 + mn * 60 + sec
+
+
+def fetch_video_info_ytapi(video_id: str) -> VideoInfo:
+    """Fetch metadata via YouTube Data API v3. No cookies, no bot risk.
+
+    Requires YOUTUBE_API_KEY env var. Free quota: 10K units/day (~3.3K videos).
+    Raises YouTubeFetchError if the key is missing or the API returns an error.
+    """
+    import httpx
+
+    if not settings.youtube_api_key:
+        raise YouTubeFetchError("YOUTUBE_API_KEY not configured")
+
+    url = canonical_url(video_id)
+    resp = httpx.get(
+        "https://www.googleapis.com/youtube/v3/videos",
+        params={
+            "part": "snippet,statistics,contentDetails",
+            "id": video_id,
+            "key": settings.youtube_api_key,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    items = data.get("items", [])
+    if not items:
+        raise YouTubeFetchError(f"YouTube API returned no items for video_id={video_id}")
+
+    item = items[0]
+    snippet = item.get("snippet", {})
+    stats = item.get("statistics", {})
+    content = item.get("contentDetails", {})
+
+    # Thumbnail: prefer maxres → high → medium → default
+    thumbs = snippet.get("thumbnails", {})
+    thumbnail_url = (
+        thumbs.get("maxres", {}).get("url")
+        or thumbs.get("high", {}).get("url")
+        or thumbs.get("medium", {}).get("url")
+        or thumbs.get("default", {}).get("url")
+    )
+
+    published = snippet.get("publishedAt", "")
+    upload_date = None
+    if published:
+        try:
+            upload_date = datetime.fromisoformat(published.replace("Z", "+00:00")).date()
+        except ValueError:
+            pass
+
+    return VideoInfo(
+        video_id=video_id,
+        url=url,
+        title=snippet.get("title") or "Untitled",
+        channel_name=snippet.get("channelTitle") or "Unknown",
+        channel_id=snippet.get("channelId"),
+        follower_count=None,  # fetched separately via channel endpoint
+        view_count=int(stats.get("viewCount") or 0),
+        like_count=int(stats.get("likeCount") or 0),
+        comment_count=int(stats.get("commentCount") or 0),
+        duration_seconds=_parse_iso_duration(content.get("duration")),
+        upload_date=upload_date,
+        thumbnail_url=thumbnail_url,
+        description=snippet.get("description"),
+        tags=snippet.get("tags") or [],
+        language=snippet.get("defaultLanguage") or snippet.get("defaultAudioLanguage"),
+    )
+
+
+def fetch_channel_followers_ytapi(channel_id: str) -> int | None:
+    """Fetch subscriber count via YouTube Data API v3."""
+    import httpx
+
+    if not settings.youtube_api_key:
+        return None
+    resp = httpx.get(
+        "https://www.googleapis.com/youtube/v3/channels",
+        params={
+            "part": "statistics",
+            "id": channel_id,
+            "key": settings.youtube_api_key,
+        },
+        timeout=10,
+    )
+    if not resp.is_success:
+        return None
+    items = resp.json().get("items", [])
+    if not items:
+        return None
+    return int(items[0].get("statistics", {}).get("subscriberCount") or 0) or None
+
+
 # ─── Public API ───────────────────────────────────────────────────────────
 
 

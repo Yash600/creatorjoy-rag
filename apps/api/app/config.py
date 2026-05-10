@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     yt_cookies_file: str | None = None     # path to Netscape-format cookies.txt
     yt_cookies_b64: str | None = None      # base64-encoded cookies.txt (for Render env var)
 
+    # ─── YouTube Data API v3 ───────────────────────────────────────────────
+    youtube_api_key: str | None = None    # GCP API key — free 10K units/day
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins_raw.split(",") if o.strip()]
