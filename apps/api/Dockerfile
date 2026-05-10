@@ -18,11 +18,11 @@ COPY requirements.txt ./
 # Install all runtime deps into the system Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download BGE-small so cold starts don't hit HuggingFace at runtime.
+# Pre-download fastembed ONNX model so cold starts don't hit the CDN.
 RUN python - <<'EOF'
-from sentence_transformers import SentenceTransformer
-SentenceTransformer("BAAI/bge-small-en-v1.5", device="cpu")
-print("BGE model cached successfully.")
+from fastembed import TextEmbedding
+list(TextEmbedding(model_name="BAAI/bge-small-en-v1.5").embed(["warmup"]))
+print("fastembed BGE model cached successfully.")
 EOF
 
 

@@ -31,9 +31,8 @@ pgvector = "^0.3.6"
 yt-dlp = ">=2025.1.0"
 youtube-transcript-api = "^0.6.2"
 
-# ML / Embeddings
-sentence-transformers = "^3.2.0"
-torch = "^2.4.0"
+# ML / Embeddings — fastembed uses ONNX Runtime (no torch), ~80 MB vs ~450 MB
+fastembed = "^0.4.0"
 
 # LLM orchestration
 langgraph = "^0.2.50"

@@ -1,12 +1,11 @@
-"""Embedder interface + BGE-small-en-v1.5 implementation.
+"""Embedder interface + BGE-small-en-v1.5 implementation via fastembed.
+
+fastembed uses ONNX Runtime instead of PyTorch, producing identical 384-dim
+BGE vectors at ~80 MB RAM vs ~450 MB for the torch/sentence-transformers stack.
+This makes it viable on Render's free tier (512 MB total).
 
 The `Embedder` protocol exists so swapping to OpenAI / Cohere / Voyage is a
-30-line change. BGE is the default because it's free, runs locally on CPU,
-and matches `text-embedding-3-small` on MTEB retrieval benchmarks at 4×
-smaller vector size.
-
-Loaded once at app startup via the lifespan handler — first call after that
-is a CPU pass of ~20ms per chunk on a Render free-tier instance.
+30-line change.
 """
 
 from __future__ import annotations
@@ -28,27 +27,22 @@ class Embedder(Protocol):
 
 
 class BGEEmbedder:
-    """Local sentence-transformers BGE-small-en-v1.5 embedder."""
+    """fastembed BGE-small-en-v1.5 embedder — ONNX Runtime, no torch."""
 
     dim: int = 384
 
     def __init__(self, model_name: str = settings.embedding_model) -> None:
-        # Imported lazily so module load doesn't trigger torch import in tests
-        from sentence_transformers import SentenceTransformer
-
-        self._model = SentenceTransformer(model_name, device="cpu")
+        from fastembed import TextEmbedding
+        # fastembed downloads the ONNX model on first use (~90 MB).
+        # In Docker we pre-download it at build time via a RUN step.
+        self._model = TextEmbedding(model_name=model_name)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        # normalize_embeddings=True so cosine distance == 1 - dot product
-        vectors = self._model.encode(
-            texts,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-            convert_to_numpy=True,
-        )
-        return vectors.tolist()
+        # fastembed returns a generator of numpy arrays
+        vectors = list(self._model.embed(texts))
+        return [v.tolist() for v in vectors]
 
     def embed_one(self, text: str) -> list[float]:
         return self.embed([text])[0]
@@ -61,7 +55,6 @@ async def embedder_lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        # Nothing to release — let GC handle the model
         pass
 
 
