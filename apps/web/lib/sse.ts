@@ -61,8 +61,8 @@ export function openChatStream(url: string): ChatStream {
 
   return {
     on(event, fn) {
-      // @ts-expect-error - generic narrowing
-      listeners[event] = fn;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (listeners as any)[event] = fn;
     },
     close() {
       es.close();
