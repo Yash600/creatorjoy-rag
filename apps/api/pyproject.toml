@@ -26,8 +26,9 @@ asyncpg = "^0.29.0"
 psycopg = { extras = ["binary", "pool"], version = "^3.2.0" }
 pgvector = "^0.3.6"
 
-# Video ingestion
-yt-dlp = "^2025.1.0"
+# Video ingestion. Pinned wide because YouTube ships anti-bot updates every
+# few weeks and yt-dlp ships counters — we always want the freshest release.
+yt-dlp = ">=2025.1.0"
 youtube-transcript-api = "^0.6.2"
 
 # ML / Embeddings

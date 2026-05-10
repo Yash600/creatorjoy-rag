@@ -87,8 +87,18 @@ async def fetch_native_captions(video_id: str) -> list[TranscriptSegment] | None
 # ─── Stage 2: Groq Whisper ────────────────────────────────────────────────
 
 
+GROQ_WHISPER_MAX_BYTES = 24 * 1024 * 1024  # Groq caps at 25 MB; 24 leaves headroom
+
+
 async def _whisper_transcribe(audio_path: Path) -> list[TranscriptSegment]:
     """Send a local audio file to Groq Whisper Large V3 with segment timestamps."""
+    size = audio_path.stat().st_size
+    if size > GROQ_WHISPER_MAX_BYTES:
+        raise RuntimeError(
+            f"audio file {audio_path.name} is {size / 1024 / 1024:.1f} MB — "
+            f"exceeds Groq Whisper's 25 MB limit. Try a shorter video, or "
+            f"chunk the audio (production work)."
+        )
     client = AsyncGroq(api_key=settings.groq_api_key)
     with open(audio_path, "rb") as f:
         audio_bytes = f.read()

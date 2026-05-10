@@ -1,41 +1,63 @@
 "use client";
 
 import { useState } from "react";
+import { ChatPanel } from "@/components/ChatPanel";
+import { IngestForm } from "@/components/IngestForm";
+import { VideoCard } from "@/components/VideoCard";
+import { useChat } from "@/hooks/useChat";
+import { ApiError, ingestVideos } from "@/lib/api";
+import type { VideoMetadata } from "@/lib/types";
 
-/**
- * Home page — scaffold layout.
- *
- * Layout intent:
- *   ┌────────────────────────────────────────────┐
- *   │ Header: title + URL inputs + Analyze       │
- *   ├──────────────────────┬─────────────────────┤
- *   │ Video A card         │                     │
- *   │ ───────────          │   Chat panel        │
- *   │ Video B card         │   (streaming SSE)   │
- *   └──────────────────────┴─────────────────────┘
- *
- * Wiring (ingest call, streaming chat, citation parsing) lands in Task #4.
- */
+interface SeekRequest {
+  label: "A" | "B";
+  seconds: number;
+  nonce: number;
+}
+
 export default function Home() {
-  const [urlA, setUrlA] = useState("");
-  const [urlB, setUrlB] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [videoA, setVideoA] = useState<VideoMetadata | null>(null);
+  const [videoB, setVideoB] = useState<VideoMetadata | null>(null);
+  const [ingestLoading, setIngestLoading] = useState(false);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+  const [seek, setSeek] = useState<SeekRequest | null>(null);
 
-  // Placeholder — real implementation hits POST /api/ingest in the next pass.
-  async function onAnalyze() {
-    if (!urlA || !urlB) return;
-    setLoading(true);
+  const chat = useChat({
+    videoAId: videoA?.video_id ?? null,
+    videoBId: videoB?.video_id ?? null,
+  });
+
+  async function handleIngest(urlA: string, urlB: string) {
+    setIngestLoading(true);
+    setIngestError(null);
+    // Clear prior session state immediately so the user can see whether the
+    // new ingest succeeded or failed without stale cards/chat lingering.
+    setVideoA(null);
+    setVideoB(null);
+    setSeek(null);
     try {
-      // const res = await fetch("/api/ingest", { ... });
-      console.log("ingest", { urlA, urlB });
+      const res = await ingestVideos(urlA, urlB);
+      setVideoA(res.video_a);
+      setVideoB(res.video_b);
+    } catch (e) {
+      setIngestError(
+        e instanceof ApiError
+          ? `${e.status}: ${e.detail}`
+          : (e as Error).message,
+      );
     } finally {
-      setLoading(false);
+      setIngestLoading(false);
     }
   }
 
+  function handleSeek(label: "A" | "B", seconds: number) {
+    // Bump nonce so re-clicking the same citation re-triggers seek
+    setSeek({ label, seconds, nonce: Date.now() });
+  }
+
+  const hasVideos = !!videoA && !!videoB;
+
   return (
-    <main className="min-h-screen flex flex-col">
-      {/* ─── Header ───────────────────────────────────────── */}
+    <main className="h-screen flex flex-col">
       <header className="border-b border-[var(--border)] px-6 py-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -46,77 +68,59 @@ export default function Home() {
               Paste two YouTube URLs. Ask why one outperformed the other.
             </p>
           </div>
-          <div className="flex gap-2 items-center flex-1 min-w-0 max-w-3xl">
-            <input
-              value={urlA}
-              onChange={(e) => setUrlA(e.target.value)}
-              placeholder="Video A — https://youtube.com/watch?v=..."
-              className="flex-1 min-w-0 bg-transparent border border-[var(--border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)]"
-            />
-            <input
-              value={urlB}
-              onChange={(e) => setUrlB(e.target.value)}
-              placeholder="Video B — https://youtube.com/watch?v=..."
-              className="flex-1 min-w-0 bg-transparent border border-[var(--border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)]"
-            />
-            <button
-              onClick={onAnalyze}
-              disabled={!urlA || !urlB || loading}
-              className="px-4 py-2 text-sm rounded bg-[var(--accent)] text-black font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {loading ? "Analyzing…" : "Analyze"}
-            </button>
-          </div>
+          <IngestForm
+            loading={ingestLoading}
+            onSubmit={handleIngest}
+            errorMessage={ingestError}
+          />
         </div>
       </header>
 
-      {/* ─── Body: video stack | chat ─────────────────────── */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_1fr] gap-0">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr] overflow-hidden">
         <aside className="border-r border-[var(--border)] p-4 space-y-3 overflow-y-auto">
-          <VideoCardPlaceholder label="A" />
-          <VideoCardPlaceholder label="B" />
+          {videoA ? (
+            <VideoCard
+              label="A"
+              video={videoA}
+              seek={seek?.label === "A" ? seek : null}
+            />
+          ) : (
+            <Placeholder label="A" />
+          )}
+          {videoB ? (
+            <VideoCard
+              label="B"
+              video={videoB}
+              seek={seek?.label === "B" ? seek : null}
+            />
+          ) : (
+            <Placeholder label="B" />
+          )}
         </aside>
 
-        <section className="flex flex-col">
-          <ChatPanelPlaceholder />
+        <section className="flex flex-col h-full overflow-hidden">
+          <ChatPanel
+            messages={chat.messages}
+            isStreaming={chat.isStreaming}
+            disabled={!hasVideos}
+            onSend={chat.send}
+            onSeek={handleSeek}
+            onNewThread={chat.newThread}
+          />
         </section>
       </div>
     </main>
   );
 }
 
-function VideoCardPlaceholder({ label }: { label: "A" | "B" }) {
+function Placeholder({ label }: { label: "A" | "B" }) {
   return (
-    <div className="border border-[var(--border)] rounded-lg p-3">
-      <div className="text-xs text-[var(--muted)] mb-2">Video {label}</div>
-      <div className="aspect-video bg-[#111] rounded mb-3" />
-      <div className="text-sm font-medium text-[var(--muted)]">
-        Submit URLs to load metadata.
+    <div className="border border-dashed border-[var(--border)] rounded-lg p-8 text-center">
+      <div className="text-xs font-mono text-[var(--muted)] mb-2">
+        VIDEO {label}
       </div>
-    </div>
-  );
-}
-
-function ChatPanelPlaceholder() {
-  return (
-    <div className="flex-1 flex flex-col">
-      <div className="flex-1 p-6 overflow-y-auto">
-        <div className="text-sm text-[var(--muted)]">
-          Once both videos are loaded, ask questions like:
-          <ul className="mt-2 ml-4 list-disc space-y-1">
-            <li>Why did Video A get more engagement than Video B?</li>
-            <li>Compare the hooks in the first 5 seconds.</li>
-            <li>What worked in A that B is missing?</li>
-            <li>What&apos;s the engagement rate of each?</li>
-          </ul>
-        </div>
-      </div>
-      <div className="border-t border-[var(--border)] p-4">
-        <input
-          placeholder="Ask anything about the two videos…"
-          disabled
-          className="w-full bg-transparent border border-[var(--border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
-        />
+      <div className="text-sm text-[var(--muted)]">
+        Submit URLs to load video.
       </div>
     </div>
   );

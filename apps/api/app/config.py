@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     retrieval_top_k_single: int = 5
     retrieval_top_k_per_video: int = 3  # used for comparison queries
 
+    # ─── yt-dlp authentication ─────────────────────────────────────────
+    # YouTube actively blocks unauthenticated yt-dlp on certain videos
+    # (newer / more "protected" content). Pick at most one of the two
+    # auth paths below; if both unset, the code falls through a chain of
+    # alternative player clients (ios → android → web).
+    yt_cookies_browser: str | None = None  # "chrome" | "firefox" | "edge" | "safari" | "brave"
+    yt_cookies_file: str | None = None     # path to Netscape-format cookies.txt
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins_raw.split(",") if o.strip()]

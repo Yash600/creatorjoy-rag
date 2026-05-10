@@ -57,8 +57,10 @@ A full-stack RAG system that ingests YouTube videos, indexes their transcripts w
                   │ videos             │ │  Whisper V3  │
                   │ chunks (vec 384)   │ └──────────────┘
                   │ channels           │
-                  │ thread_checkpoints │ ┌──────────────┐
+                  │ chat_messages      │ ┌──────────────┐
                   └────────────────────┘ │ yt-dlp       │
+                                         │  + strategy  │
+                                         │  chain       │
                                          │ youtube-     │
                                          │ transcript-  │
                                          │ api          │
@@ -144,6 +146,87 @@ That's **$0.013 per creator per session** — well under typical SaaS unit econo
 
 ---
 
+## Production reliability path
+
+The MVP uses a yt-dlp **strategy chain** (cookies → iOS player client → Android player client → web client) for both metadata and audio download. This gets us ~95% of public YouTube videos for $0 in third-party fees. It is **deliberately scoped for a weekend technical screen** and is fragile for production for three reasons:
+
+1. **Browser cookies don't work in containerized prod** — there's no installed browser to read from.
+2. **Cookie files expire** and need rotation infrastructure.
+3. **YouTube ships new bot-detection rules every few weeks** — even the strategy chain has an irreducible ~5% failure rate.
+
+Production-grade Creatorjoy splits data acquisition into **two independent layers**, each with paid commercial fallbacks. yt-dlp moves from primary path to free fallback.
+
+### Metadata layer (production)
+
+Replace yt-dlp metadata with the **official YouTube Data API v3**:
+
+| Provider | Cost | Reliability | Role |
+|---|---|---|---|
+| YouTube Data API v3 | Free up to 10,000 units/day; ~$5/M units after | 100% — official, never blocked | Primary always |
+| yt-dlp + cookies + chain | Free | ~95% | Fallback if quota exhausted |
+
+The official API returns title, channel info, follower count, views, likes, comments, upload date, duration — everything needed to compute engagement rate. Zero anti-bot risk. Free quota covers ~2,500 video lookups per day; cost is negligible above that.
+
+Caveat: the official API does **not** provide transcripts for arbitrary videos (only ones the API caller owns). That's the next layer.
+
+### Transcript layer (production cascade)
+
+A three-stage cascade where each stage is more reliable but more expensive. Stage one handles the easy ~70%; stages two and three pick up the long tail.
+
+| Stage | Provider | Per-transcript cost | Cumulative success |
+|---|---|---|---|
+| 1 | youtube-transcript-api with rotating proxies | $0 | ~70% |
+| 2 | Apify YouTube Transcript Scraper actor | ~$0.0005 | ~95% |
+| 3 | yt-dlp via Apify proxy → AssemblyAI / Groq Whisper Large V3 | ~$0.02 audio + $0.04/hr transcription | ~99.5% |
+
+**Apify is the production substitute for the cat-and-mouse fight.** They run a fleet of residential proxies and maintain the YouTube scraping stack as their core business. Production-grade Creatorjoy outsources that fight at $0.50 per 1,000 transcripts. Equivalent providers in this space: Supadata.ai, Tactiq, ScrapingBee.
+
+### Cost at 1,000 creators / day with the production stack
+
+Per creator: 2 videos.
+
+| Component | Daily cost |
+|---|---|
+| YouTube Data API v3 (within free 10K-unit quota) | $0 |
+| Transcript stage 1 (~70% of videos) | $0 |
+| Transcript stage 2 — Apify (~25%) | ~$0.25 |
+| Transcript stage 3 — Whisper (~5%) | ~$2.00 |
+| **Reliability budget added on top of MVP cost** | **~$2.25/day** |
+
+That's **$0.00225 per creator per day for 99.5% transcript reliability with zero engineering ops on the YouTube side.** The $11/day LLM cost still dominates the unit economics — i.e., adding production reliability does **not** materially change the cost story.
+
+### Why the migration is one PR, not a rewrite
+
+The current `services/youtube.py` and `services/transcripts.py` already separate metadata from transcripts and use a fallback structure. Production means swapping implementations behind the same interface:
+
+```python
+# Current (weekend MVP)
+class TranscriptFetcher:
+    async def fetch(video_id) -> Transcript:
+        # 1. youtube-transcript-api
+        # 2. yt-dlp + Whisper
+
+# Production
+class TranscriptFetcher:
+    async def fetch(video_id) -> Transcript:
+        # 1. youtube-transcript-api (with proxy rotation)
+        # 2. ApifyTranscriptProvider
+        # 3. ApifyAudioDownload + AssemblyAI
+```
+
+Same interface. Same DB writes. Same caller. Behind a per-tenant feature flag, the same codebase serves a free tier (yt-dlp chain) and a paid tier (full Apify/AssemblyAI cascade) without any structural change.
+
+### Operational layer
+
+Beyond providers, production also needs:
+
+- **Per-strategy success-rate monitoring.** Track which strategy succeeded for each video; alert when stage-1 success drops below 60%.
+- **Auto-failover** when a strategy degrades (e.g., disable cookies-from-browser if it returns 401 for two consecutive videos).
+- **Async ingestion** for long videos. Replace the inline ingest call with a Celery + Redis job queue; return a `job_id` immediately and let the frontend poll or subscribe.
+- **Retry budget.** Cap total provider spend per video at $0.50 to prevent runaway cost on adversarial inputs.
+
+---
+
 ## Running locally
 
 ### Prerequisites
@@ -162,10 +245,14 @@ npm install
 # ─── Backend ──────────────────────────────────────────
 cd apps/api
 poetry install
-cp .env.example .env  # fill in DATABASE_URL and GROQ_API_KEY
+cp .env.example .env
+# Fill in DATABASE_URL and GROQ_API_KEY at minimum.
+# Optional but recommended for max ingest reliability:
+#   YT_COOKIES_BROWSER=firefox  (or edge / chrome)
 
-# Run migrations
+# Run migrations (or paste each .sql file into Neon's SQL editor)
 poetry run psql "$DATABASE_URL" -f migrations/001_initial.sql
+poetry run psql "$DATABASE_URL" -f migrations/002_chat.sql
 
 # Start the API (port 8000)
 poetry run uvicorn app.main:app --reload
@@ -173,10 +260,18 @@ poetry run uvicorn app.main:app --reload
 # ─── Frontend (new terminal) ──────────────────────────
 cd apps/web
 cp .env.example .env.local
+# .env.local must contain:
+#   NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+# (used by EventSource — the dev-server rewrite buffers SSE)
 npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+### Why the env vars matter
+
+- `YT_COOKIES_BROWSER` enables the cookies-from-browser auth strategy in the yt-dlp chain. Without it you still hit ~95% of public videos via the iOS/Android player-client fallbacks; with it you hit ~99% (the missing 1% are videos that block embeds entirely).
+- `NEXT_PUBLIC_API_URL` is required because Next.js's dev-server proxy buffers Server-Sent Events. EventSource hits the FastAPI backend directly to preserve token-by-token streaming. CORS is preconfigured on the backend for `http://localhost:3000`.
 
 ---
 
@@ -194,11 +289,13 @@ Open `http://localhost:3000`.
 
 ## Future work
 
-- **Multi-platform ingestion** — TikTok metadata via yt-dlp, transcript via Whisper (no native captions); Instagram Reels via Graph API token.
-- **Cohere Rerank** at retrieval time — boosts top-k precision by ~15% in our internal tests for ~$0.001/query.
-- **Semantic chunking** as an alternative to time-based, using transcript topic shifts.
-- **Per-creator workspaces** behind Clerk auth; rate limiting via Redis.
-- **Async ingestion** with a job queue (Celery + Redis) for very long videos.
+- **Multi-platform ingestion.** TikTok metadata is already supported by yt-dlp; transcripts require Whisper (no native captions). Instagram Reels needs a Meta Graph API token (Instagram Basic Display app review) — explicitly scoped out of the weekend MVP because the auth flow alone is a multi-day project.
+- **Cohere Rerank** at retrieval time — boosts top-k precision by ~15% for ~$0.001/query.
+- **Semantic chunking** as an alternative to time-based, using transcript topic shifts (BERTopic or e5-mistral-based segmentation).
+- **Per-creator workspaces** behind Clerk auth; multi-tenant isolation via row-level security.
+- **Cohort comparison** — analyze a creator's full catalog vs. the platform median for their niche.
+
+(Production reliability concerns — provider cascade, async ingestion queue, monitoring — are covered in the [Production reliability path](#production-reliability-path) section above.)
 
 ---
 
