@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     # alternative player clients (ios → android → web).
     yt_cookies_browser: str | None = None  # "chrome" | "firefox" | "edge" | "safari" | "brave"
     yt_cookies_file: str | None = None     # path to Netscape-format cookies.txt
+    yt_cookies_b64: str | None = None      # base64-encoded cookies.txt (for Render env var)
 
     @property
     def cors_origins(self) -> list[str]:

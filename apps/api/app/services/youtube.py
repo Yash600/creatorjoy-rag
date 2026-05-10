@@ -21,8 +21,10 @@ them in ``asyncio.to_thread`` so the event loop isn't blocked.
 
 from __future__ import annotations
 
+import base64
 import logging
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -34,6 +36,37 @@ from yt_dlp.utils import DownloadError
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_cookies_file() -> str | None:
+    """Return a usable cookies file path.
+
+    Priority:
+    1. YT_COOKIES_FILE — explicit path (local dev or mounted secret)
+    2. YT_COOKIES_B64  — base64-encoded cookies.txt pasted into Render env vars
+    3. None            — fall through to player-client strategies
+    """
+    if settings.yt_cookies_file:
+        return settings.yt_cookies_file
+    if settings.yt_cookies_b64:
+        try:
+            decoded = base64.b64decode(settings.yt_cookies_b64)
+            # Write to a temp file that persists for the process lifetime
+            tmp = tempfile.NamedTemporaryFile(
+                delete=False, suffix=".txt", prefix="yt_cookies_"
+            )
+            tmp.write(decoded)
+            tmp.flush()
+            tmp.close()
+            logger.info("Decoded YT_COOKIES_B64 → %s", tmp.name)
+            return tmp.name
+        except Exception as e:
+            logger.warning("Failed to decode YT_COOKIES_B64: %s", e)
+    return None
+
+
+# Resolved once at module load so we don't re-decode on every request
+_COOKIES_FILE: str | None = _resolve_cookies_file()
 
 
 # ─── URL parsing ──────────────────────────────────────────────────────────
@@ -142,9 +175,9 @@ def _auth_strategies() -> list[tuple[str, dict[str, Any]]]:
             )
         )
 
-    if settings.yt_cookies_file:
+    if _COOKIES_FILE:
         out.append(
-            ("cookies-file", {"cookiefile": settings.yt_cookies_file})
+            ("cookies-file", {"cookiefile": _COOKIES_FILE})
         )
 
     # Default — let yt-dlp pick its own client fallback chain. This includes
