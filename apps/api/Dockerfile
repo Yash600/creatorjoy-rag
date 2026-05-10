@@ -10,17 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry (pinned for reproducibility)
-RUN pip install --no-cache-dir poetry==1.8.3
-
 WORKDIR /app
 
-# Copy lock files first — layer-cached unless deps change
-COPY pyproject.toml poetry.lock ./
+# Copy requirements first for layer caching
+COPY requirements.txt ./
 
-# Install all runtime deps into the system Python (no virtualenv in Docker)
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-root --without dev --no-interaction --no-ansi
+# Install all runtime deps into the system Python
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download BGE-small so cold starts don't hit HuggingFace at runtime.
 RUN python - <<'EOF'
