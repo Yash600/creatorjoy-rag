@@ -10,5 +10,8 @@
     "build": "npm --workspace apps/web run build",
     "start": "npm --workspace apps/web run start",
     "lint": "npm --workspace apps/web run lint"
+  },
+  "dependencies": {
+    "next": "^16.2.6"
   }
 }
