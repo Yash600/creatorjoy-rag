@@ -14,7 +14,7 @@ interface Props {
 }
 
 const SUGGESTIONS = [
-  { emoji: "🏆", text: "Why did Video A outperform Video B?" },
+  { emoji: "🏆", text: "Why did one Video outperform another Video?" },
   { emoji: "🎣", text: "Compare the hooks in the first 30 seconds." },
   { emoji: "📈", text: "What drove higher engagement on one video?" },
   { emoji: "💡", text: "What should the creator do differently next time?" },
