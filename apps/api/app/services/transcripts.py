@@ -32,6 +32,8 @@ from app.services.youtube import download_audio
 
 logger = logging.getLogger(__name__)
 
+# Supadata free tier rate-limits concurrent requests — serialize all calls.
+_supadata_sem = asyncio.Semaphore(1)
 
 TranscriptSource = Literal["native_captions", "whisper_fallback"]
 
@@ -157,28 +159,29 @@ async def fetch_supadata_transcript(video_id: str) -> list[TranscriptSegment] | 
     if not settings.supadata_api_key:
         return None
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            # Retry up to 3 times on 429 with backoff
-            for attempt in range(3):
-                resp = await client.get(
-                    "https://api.supadata.ai/v1/youtube/transcript",
-                    params={"videoId": video_id, "lang": "en", "text": "false"},
-                    headers={"x-api-key": settings.supadata_api_key},
-                )
-                if resp.status_code == 429:
-                    wait = 2 ** attempt  # 1s, 2s, 4s
-                    logger.warning("supadata 429 for %s, retrying in %ss", video_id, wait)
-                    await asyncio.sleep(wait)
-                    continue
-                if resp.status_code == 404:
-                    logger.info("supadata: no transcript for %s", video_id)
+        async with _supadata_sem:  # serialize: only one Supadata call at a time
+            async with httpx.AsyncClient(timeout=30) as client:
+                # Retry up to 3 times on 429 with backoff
+                for attempt in range(3):
+                    resp = await client.get(
+                        "https://api.supadata.ai/v1/youtube/transcript",
+                        params={"videoId": video_id, "lang": "en", "text": "false"},
+                        headers={"x-api-key": settings.supadata_api_key},
+                    )
+                    if resp.status_code == 429:
+                        wait = 2 ** attempt  # 1s, 2s, 4s
+                        logger.warning("supadata 429 for %s, retrying in %ss", video_id, wait)
+                        await asyncio.sleep(wait)
+                        continue
+                    if resp.status_code == 404:
+                        logger.info("supadata: no transcript for %s", video_id)
+                        return None
+                    resp.raise_for_status()
+                    break
+                else:
+                    logger.warning("supadata: exhausted retries for %s", video_id)
                     return None
-                resp.raise_for_status()
-                break
-            else:
-                logger.warning("supadata: exhausted retries for %s", video_id)
-                return None
-            data = resp.json()
+                data = resp.json()
 
         # Supadata returns {content: [{text, offset, duration}], lang, ...}
         # offset and duration are in milliseconds
