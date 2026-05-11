@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import httpx
 from groq import AsyncGroq
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
@@ -145,6 +146,54 @@ async def fetch_whisper_fallback(video_id: str) -> list[TranscriptSegment]:
         return await _whisper_transcribe(audio_path)
 
 
+# ─── Stage 1b: Supadata transcript API ───────────────────────────────────
+
+
+async def fetch_supadata_transcript(video_id: str) -> list[TranscriptSegment] | None:
+    """Fetch transcript via Supadata.ai API — works from any server IP.
+
+    Returns None if the key is not configured or the video has no transcript.
+    """
+    if not settings.supadata_api_key:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                "https://api.supadata.ai/v1/youtube/transcript",
+                params={"videoId": video_id, "lang": "en", "text": "false"},
+                headers={"x-api-key": settings.supadata_api_key},
+            )
+            if resp.status_code == 404:
+                logger.info("supadata: no transcript for %s", video_id)
+                return None
+            resp.raise_for_status()
+            data = resp.json()
+
+        # Supadata returns {content: [{text, offset, duration}], lang, ...}
+        # offset and duration are in milliseconds
+        content = data.get("content") or []
+        if not content:
+            logger.info("supadata: empty transcript for %s", video_id)
+            return None
+
+        segments = []
+        for item in content:
+            text = (item.get("text") or "").replace("\n", " ").strip()
+            if not text:
+                continue
+            # offset is in milliseconds → convert to seconds
+            start = float(item.get("offset") or item.get("start") or 0) / 1000
+            duration = float(item.get("duration") or 2000) / 1000
+            segments.append(TranscriptSegment(text=text, start=start, duration=duration))
+
+        logger.info("supadata: got %d segments for %s", len(segments), video_id)
+        return segments if segments else None
+
+    except Exception as e:
+        logger.warning("supadata fetch failed for %s: %s", video_id, e)
+        return None
+
+
 # ─── Public API ───────────────────────────────────────────────────────────
 
 
@@ -156,20 +205,17 @@ async def fetch_transcript(
     Raises if BOTH paths fail — the ingest orchestrator turns that into a
     user-facing error.
     """
+    # Stage 1: native captions via youtube-transcript-api
     native = await fetch_native_captions(video_id)
     if native:
         return native, "native_captions"
 
-    # In production without a residential proxy, yt-dlp audio download is
-    # blocked by YouTube's datacenter IP detection. Fail fast with a clear
-    # message rather than a confusing yt-dlp error.
-    if not settings.apify_api_token:
-        raise RuntimeError(
-            f"Video {video_id} has no auto-generated captions. "
-            "Please try a different video that has captions enabled, "
-            "or configure APIFY_API_TOKEN for the Whisper fallback."
-        )
+    # Stage 1b: Supadata API — works from any server IP, no bot detection
+    supadata = await fetch_supadata_transcript(video_id)
+    if supadata:
+        return supadata, "native_captions"
 
+    # Stage 2: Whisper fallback via yt-dlp audio download
     logger.info("falling back to Whisper for %s", video_id)
     whisper = await fetch_whisper_fallback(video_id)
     return whisper, "whisper_fallback"

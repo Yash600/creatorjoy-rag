@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # ─── Apify proxy (residential IPs for YouTube bypass) ─────────────────
     apify_api_token: str | None = None
 
+    # ─── Supadata (YouTube transcript API) ────────────────────────────────
+    supadata_api_key: str | None = None
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins_raw.split(",") if o.strip()]
