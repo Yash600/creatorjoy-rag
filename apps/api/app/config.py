@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # ─── YouTube Data API v3 ───────────────────────────────────────────────
     youtube_api_key: str | None = None    # GCP API key — free 10K units/day
 
+    # ─── Apify proxy (residential IPs for YouTube bypass) ─────────────────
+    apify_api_token: str | None = None
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins_raw.split(",") if o.strip()]

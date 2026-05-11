@@ -54,6 +54,14 @@ class TranscriptSegment:
 # ─── Stage 1: native captions ─────────────────────────────────────────────
 
 
+def _apify_proxies() -> dict | None:
+    """Return a proxies dict using Apify residential IPs, or None if unconfigured."""
+    if not settings.apify_api_token:
+        return None
+    proxy_url = f"http://groups-RESIDENTIAL,country-US:{settings.apify_api_token}@proxy.apify.com:8000"
+    return {"http": proxy_url, "https": proxy_url}
+
+
 def _fetch_native_sync(video_id: str) -> list[TranscriptSegment]:
     """Blocking call — caller wraps in to_thread."""
     from app.services.youtube import _COOKIES_FILE
@@ -61,6 +69,10 @@ def _fetch_native_sync(video_id: str) -> list[TranscriptSegment]:
     kwargs: dict = {"languages": ["en", "en-US", "en-GB", "a.en"]}
     if _COOKIES_FILE:
         kwargs["cookies"] = _COOKIES_FILE
+
+    proxies = _apify_proxies()
+    if proxies:
+        kwargs["proxies"] = proxies
 
     raw = YouTubeTranscriptApi.get_transcript(video_id, **kwargs)
     return [
