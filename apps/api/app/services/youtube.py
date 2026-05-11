@@ -219,15 +219,19 @@ def _auth_strategies() -> list[tuple[str, dict[str, Any]]]:
     return out
 
 
+def _apify_proxy_url() -> str | None:
+    """Return Apify residential proxy URL if configured."""
+    if not settings.apify_api_token:
+        return None
+    return f"http://groups-RESIDENTIAL,country-US:{settings.apify_api_token}@proxy.apify.com:8000"
+
+
 _BASE_INFO_OPTS: dict[str, Any] = {
     "quiet": True,
     "no_warnings": True,
     "ignoreerrors": False,
     "skip_download": True,
     "extract_flat": False,
-    # Suppress yt-dlp's "ERROR:" prints. Strategy chain failures are
-    # expected, captured as DownloadError exceptions, and logged via our
-    # own logger. Without this they spam stderr and look alarming.
     "logger": _SilentLogger(),
 }
 
@@ -257,9 +261,12 @@ def _try_extract(
     Returns the info dict on success. Raises YouTubeFetchError if every
     strategy fails AND ``fatal=True``; otherwise returns None.
     """
+    proxy_url = _apify_proxy_url()
     last_err: Exception | None = None
     for name, fragment in _auth_strategies():
         opts = {**base_opts, **fragment}
+        if proxy_url:
+            opts["proxy"] = proxy_url
         try:
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=download)
@@ -457,6 +464,7 @@ def download_audio(video_id: str, dest_dir: str | Path) -> Path:
     outtmpl = str(dest_dir / f"{video_id}.%(ext)s")
     url = canonical_url(video_id)
 
+    proxy_url = _apify_proxy_url()
     last_err: Exception | None = None
     for name, fragment in _auth_strategies():
         # Wipe any leftover from a previous strategy's failed attempt
@@ -467,6 +475,8 @@ def download_audio(video_id: str, dest_dir: str | Path) -> Path:
                 pass
 
         opts = {**_BASE_AUDIO_OPTS, **fragment, "outtmpl": outtmpl}
+        if proxy_url:
+            opts["proxy"] = proxy_url
         try:
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
