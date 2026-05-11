@@ -158,15 +158,26 @@ async def fetch_supadata_transcript(video_id: str) -> list[TranscriptSegment] | 
         return None
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                "https://api.supadata.ai/v1/youtube/transcript",
-                params={"videoId": video_id, "lang": "en", "text": "false"},
-                headers={"x-api-key": settings.supadata_api_key},
-            )
-            if resp.status_code == 404:
-                logger.info("supadata: no transcript for %s", video_id)
+            # Retry up to 3 times on 429 with backoff
+            for attempt in range(3):
+                resp = await client.get(
+                    "https://api.supadata.ai/v1/youtube/transcript",
+                    params={"videoId": video_id, "lang": "en", "text": "false"},
+                    headers={"x-api-key": settings.supadata_api_key},
+                )
+                if resp.status_code == 429:
+                    wait = 2 ** attempt  # 1s, 2s, 4s
+                    logger.warning("supadata 429 for %s, retrying in %ss", video_id, wait)
+                    await asyncio.sleep(wait)
+                    continue
+                if resp.status_code == 404:
+                    logger.info("supadata: no transcript for %s", video_id)
+                    return None
+                resp.raise_for_status()
+                break
+            else:
+                logger.warning("supadata: exhausted retries for %s", video_id)
                 return None
-            resp.raise_for_status()
             data = resp.json()
 
         # Supadata returns {content: [{text, offset, duration}], lang, ...}
