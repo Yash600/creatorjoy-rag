@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const STEPS = [
   {
@@ -41,45 +41,44 @@ const STEPS = [
   },
 ];
 
+// Flatten all messages into a single sequence with step info
+const SEQUENCE = STEPS.flatMap((step, si) =>
+  step.messages.map((msg, mi) => ({ stepIndex: si, msgIndex: mi, msg }))
+);
+
 interface Props {
   visible: boolean;
 }
 
 export function LoadingOverlay({ visible }: Props) {
-  const [stepIndex, setStepIndex] = useState(0);
-  const [msgIndex, setMsgIndex] = useState(0);
+  const [seqIndex, setSeqIndex] = useState(0);
   const [fade, setFade] = useState(true);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Advance message every 2.8s
   useEffect(() => {
-    if (!visible) return;
-    setStepIndex(0);
-    setMsgIndex(0);
-    setFade(true);
+    if (!visible) {
+      setSeqIndex(0);
+      setFade(true);
+      return;
+    }
 
-    const id = setInterval(() => {
+    timerRef.current = setInterval(() => {
       setFade(false);
       setTimeout(() => {
-        setMsgIndex((prev) => {
-          const step = STEPS[stepIndex] ?? STEPS[STEPS.length - 1];
-          const nextMsg = prev + 1;
-          if (nextMsg >= step.messages.length) {
-            setStepIndex((s) => Math.min(s + 1, STEPS.length - 1));
-            setFade(true);
-            return 0;
-          }
-          setFade(true);
-          return nextMsg;
-        });
-      }, 200);
+        setSeqIndex((i) => (i + 1) % SEQUENCE.length);
+        setFade(true);
+      }, 220);
     }, 2800);
 
-    return () => clearInterval(id);
-  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [visible]);
 
   if (!visible) return null;
 
-  const currentStep = STEPS[Math.min(stepIndex, STEPS.length - 1)];
+  const current = SEQUENCE[seqIndex % SEQUENCE.length];
+  const step = STEPS[current.stepIndex];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg)]/90 backdrop-blur-sm">
@@ -89,41 +88,46 @@ export function LoadingOverlay({ visible }: Props) {
         <div className="relative w-20 h-20 flex items-center justify-center">
           <div className="absolute inset-0 rounded-full border-4 border-[var(--border)]" />
           <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[var(--accent)] animate-spin" />
-          <span className="text-3xl">{currentStep.icon}</span>
+          <span className="text-3xl">{step.icon}</span>
         </div>
 
-        {/* Step label */}
+        {/* Step label + message */}
         <div className="text-center space-y-2">
           <div className="text-base font-semibold text-[var(--fg)]">
-            {currentStep.label}
+            {step.label}
           </div>
           <div
             className="text-sm text-[var(--muted)] min-h-[1.5rem] transition-opacity duration-200"
             style={{ opacity: fade ? 1 : 0 }}
           >
-            {currentStep.messages[msgIndex]}
+            {current.msg}
           </div>
         </div>
 
-        {/* Step dots */}
-        <div className="flex gap-2">
+        {/* Step progress dots */}
+        <div className="flex items-center gap-1">
           {STEPS.map((s, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2"
-            >
+            <div key={i} className="flex items-center gap-1">
               <div
-                className="w-2 h-2 rounded-full transition-all duration-500"
+                className="rounded-full transition-all duration-500"
                 style={{
-                  background: i <= stepIndex ? "var(--accent)" : "var(--border)",
-                  transform: i === stepIndex ? "scale(1.4)" : "scale(1)",
+                  width: i === current.stepIndex ? "24px" : "8px",
+                  height: "8px",
+                  background:
+                    i < current.stepIndex
+                      ? "var(--accent)"
+                      : i === current.stepIndex
+                      ? "var(--accent)"
+                      : "var(--border)",
+                  opacity: i > current.stepIndex ? 0.5 : 1,
                 }}
               />
               {i < STEPS.length - 1 && (
                 <div
-                  className="w-6 h-0.5 transition-all duration-500"
+                  className="w-4 h-0.5 transition-all duration-500"
                   style={{
-                    background: i < stepIndex ? "var(--accent)" : "var(--border)",
+                    background:
+                      i < current.stepIndex ? "var(--accent)" : "var(--border)",
                   }}
                 />
               )}
@@ -132,8 +136,9 @@ export function LoadingOverlay({ visible }: Props) {
         </div>
 
         {/* Tip */}
-        <div className="text-xs text-[var(--muted-light)] text-center bg-white border border-[var(--border)] rounded-lg px-4 py-3 max-w-sm">
-          💡 <span className="font-medium text-[var(--muted)]">Pro tip:</span> Try asking &ldquo;What made the hook of Video A stronger?&rdquo; once loaded.
+        <div className="text-xs text-[var(--muted)] text-center bg-white border border-[var(--border)] rounded-xl px-4 py-3 max-w-sm shadow-sm">
+          💡 <span className="font-semibold text-[var(--fg-soft)]">Pro tip:</span>{" "}
+          Once loaded, ask &ldquo;What made the hook of Video A stronger?&rdquo;
         </div>
       </div>
     </div>
