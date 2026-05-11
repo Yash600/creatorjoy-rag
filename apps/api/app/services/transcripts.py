@@ -56,10 +56,13 @@ class TranscriptSegment:
 
 def _fetch_native_sync(video_id: str) -> list[TranscriptSegment]:
     """Blocking call — caller wraps in to_thread."""
-    raw = YouTubeTranscriptApi.get_transcript(
-        video_id,
-        languages=["en", "en-US", "en-GB", "a.en"],
-    )
+    from app.services.youtube import _COOKIES_FILE
+
+    kwargs: dict = {"languages": ["en", "en-US", "en-GB", "a.en"]}
+    if _COOKIES_FILE:
+        kwargs["cookies"] = _COOKIES_FILE
+
+    raw = YouTubeTranscriptApi.get_transcript(video_id, **kwargs)
     return [
         TranscriptSegment(
             text=seg["text"].replace("\n", " ").strip(),
