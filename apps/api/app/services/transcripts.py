@@ -228,5 +228,11 @@ async def fetch_transcript(
 
     # Stage 2: Whisper fallback via yt-dlp audio download
     logger.info("falling back to Whisper for %s", video_id)
-    whisper = await fetch_whisper_fallback(video_id)
+    try:
+        whisper = await asyncio.wait_for(fetch_whisper_fallback(video_id), timeout=90.0)
+    except asyncio.TimeoutError:
+        raise RuntimeError(
+            f"All transcript sources failed for {video_id}: "
+            "native captions blocked, Supadata unavailable, yt-dlp timed out after 90s."
+        )
     return whisper, "whisper_fallback"

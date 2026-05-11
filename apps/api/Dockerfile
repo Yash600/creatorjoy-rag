@@ -19,6 +19,8 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download fastembed ONNX model so cold starts don't hit the CDN.
+# fastembed caches to ~/.cache/fastembed-models by default.
+ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed-models
 RUN python - <<'EOF'
 from fastembed import TextEmbedding
 list(TextEmbedding(model_name="BAAI/bge-small-en-v1.5").embed(["warmup"]))
