@@ -37,6 +37,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
+# Tell fastembed where the pre-downloaded model lives (must match builder path)
+ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed-models
+
 WORKDIR /app
 
 # Copy installed Python packages from builder
