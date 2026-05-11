@@ -5,7 +5,7 @@
 A full-stack RAG system that ingests YouTube videos, indexes their transcripts with timestamp-aware chunks, and lets creators chat about hooks, engagement, and improvements with **streaming responses**, **source citations**, and **conversation memory**.
 
 **Live demo:** https://creatorjoy-rag.vercel.app
-**Walkthrough:** _Loom link coming with submission_
+
 
 ---
 
