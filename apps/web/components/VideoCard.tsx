@@ -11,7 +11,7 @@ import type { VideoMetadata } from "@/lib/types";
 
 interface SeekRequest {
   seconds: number;
-  nonce: number; // increments so identical seeks re-trigger
+  nonce: number;
 }
 
 interface Props {
@@ -20,13 +20,6 @@ interface Props {
   seek: SeekRequest | null;
 }
 
-/**
- * YouTube embed + structured metadata.
- *
- * Seeking: when `seek.nonce` changes, we postMessage to the iframe to jump
- * the player to `seek.seconds`. Requires `enablejsapi=1` on the embed URL.
- * We also call `playVideo` so the user immediately sees the cited moment.
- */
 export function VideoCard({ label, video, seek }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -44,19 +37,30 @@ export function VideoCard({ label, video, seek }: Props) {
   }, [seek?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const embedSrc = `https://www.youtube.com/embed/${video.video_id}?enablejsapi=1&rel=0`;
+  const isWhisper = video.transcript_source === "whisper_fallback";
 
   return (
-    <div className="border border-[var(--border)] rounded-lg overflow-hidden bg-[#0d0d0d]">
-      <div className="px-3 py-2 border-b border-[var(--border)] flex items-center justify-between text-xs">
-        <span className="font-mono text-[var(--accent)]">VIDEO {label}</span>
-        <span className="text-[var(--muted)]">
-          {video.transcript_source === "whisper_fallback"
-            ? "transcript: whisper"
-            : "transcript: native"}
+    <div className="bg-white border border-[var(--border)] rounded-xl overflow-hidden shadow-sm fade-in">
+      {/* Label bar */}
+      <div className="px-4 py-2.5 border-b border-[var(--border)] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white"
+            style={{ background: label === "A" ? "var(--accent)" : "#6366F1" }}
+          >
+            {label}
+          </span>
+          <span className="text-sm font-medium text-[var(--fg)] truncate max-w-[200px]">
+            {video.channel_name}
+          </span>
+        </div>
+        <span className="text-[10px] text-[var(--muted-light)] bg-[var(--border-soft)] px-2 py-0.5 rounded-full">
+          {isWhisper ? "whisper" : "native captions"}
         </span>
       </div>
 
-      <div className="relative aspect-video bg-black">
+      {/* Embed */}
+      <div className="relative aspect-video bg-[#000]">
         <iframe
           ref={iframeRef}
           src={embedSrc}
@@ -66,25 +70,26 @@ export function VideoCard({ label, video, seek }: Props) {
         />
       </div>
 
-      <div className="px-3 py-3 space-y-2">
-        <div className="text-sm font-medium leading-snug line-clamp-2">
+      {/* Info */}
+      <div className="px-4 py-3 space-y-3">
+        <div className="text-sm font-semibold leading-snug line-clamp-2 text-[var(--fg)]">
           {video.title}
         </div>
         <div className="text-xs text-[var(--muted)]">
-          {video.channel_name} · {formatCount(video.follower_count)} subs
+          {formatCount(video.follower_count)} subscribers · uploaded {formatDate(video.upload_date)}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
-          <Stat label="views" value={formatCount(video.view_count)} />
-          <Stat label="likes" value={formatCount(video.like_count)} />
-          <Stat label="comments" value={formatCount(video.comment_count)} />
+        {/* Stats grid */}
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          <Stat label="Views" value={formatCount(video.view_count)} />
+          <Stat label="Likes" value={formatCount(video.like_count)} />
+          <Stat label="Comments" value={formatCount(video.comment_count)} />
+          <Stat label="Duration" value={formatDuration(video.duration_seconds)} />
           <Stat
-            label="engagement"
+            label="Engagement"
             value={formatRate(video.engagement_rate)}
             highlight
           />
-          <Stat label="duration" value={formatDuration(video.duration_seconds)} />
-          <Stat label="uploaded" value={formatDate(video.upload_date)} />
         </div>
       </div>
     </div>
@@ -101,14 +106,12 @@ function Stat({
   highlight?: boolean;
 }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-[var(--muted)]">
+    <div className={`rounded-lg px-2.5 py-2 ${highlight ? "bg-[var(--accent-soft)] border border-[rgba(249,115,22,0.2)]" : "bg-[var(--border-soft)]"}`}>
+      <div className="text-[9px] uppercase tracking-wider font-semibold text-[var(--muted-light)] mb-0.5">
         {label}
       </div>
       <div
-        className={`font-mono text-sm ${
-          highlight ? "text-[var(--accent)] font-semibold" : ""
-        }`}
+        className={`text-sm font-bold ${highlight ? "text-[var(--accent)]" : "text-[var(--fg-soft)]"}`}
       >
         {value}
       </div>

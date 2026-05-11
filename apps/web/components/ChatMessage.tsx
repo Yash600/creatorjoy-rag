@@ -25,14 +25,14 @@ export function ChatMessage({ message, onSeek }: Props) {
       className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}
     >
       <div
-        className={`max-w-[85%] rounded-lg px-4 py-3 text-sm leading-relaxed ${
+        className={`max-w-[85%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
           isUser
-            ? "bg-[#1a1a1a] text-white"
-            : "bg-transparent border border-[var(--border)] text-[var(--fg)]"
+            ? "bg-[var(--accent)] text-white shadow-sm"
+            : "bg-[var(--bg)] border border-[var(--border)] text-[var(--fg)]"
         }`}
       >
         {!isUser && message.query_class && (
-          <div className="text-[10px] uppercase tracking-wider text-[var(--muted)] mb-2 font-mono">
+          <div className="text-[10px] uppercase tracking-wider text-[var(--accent)] mb-2 font-semibold">
             {CLASS_LABEL[message.query_class]}
           </div>
         )}

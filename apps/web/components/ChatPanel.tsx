@@ -14,10 +14,10 @@ interface Props {
 }
 
 const SUGGESTIONS = [
-  "Why did Video A get more engagement than Video B?",
-  "Compare the hooks in the first 5 seconds.",
-  "What's the engagement rate of each?",
-  "Suggest improvements for B based on what worked in A.",
+  { emoji: "🏆", text: "Why did Video A outperform Video B?" },
+  { emoji: "🎣", text: "Compare the hooks in the first 30 seconds." },
+  { emoji: "📈", text: "What drove higher engagement on one video?" },
+  { emoji: "💡", text: "What should the creator do differently next time?" },
 ];
 
 export function ChatPanel({
@@ -31,7 +31,6 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on new messages / streaming tokens
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
@@ -52,66 +51,110 @@ export function ChatPanel({
     }
   }
 
+  const isEmpty = messages.length === 0;
+
   return (
-    <div className="flex-1 flex flex-col h-full">
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-3">
-        <div className="text-sm font-medium">Chat</div>
+    <div className="flex-1 flex flex-col h-full bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+          <span className="text-sm font-semibold text-[var(--fg)]">Content Intelligence</span>
+        </div>
         <button
           type="button"
           onClick={onNewThread}
-          disabled={messages.length === 0 || isStreaming}
-          className="text-xs text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30 disabled:cursor-not-allowed"
+          disabled={isEmpty || isStreaming}
+          className="text-xs text-[var(--muted)] hover:text-[var(--fg)] disabled:opacity-30 disabled:cursor-not-allowed px-3 py-1 rounded-lg hover:bg-[var(--border-soft)] transition-all"
         >
-          new thread
+          New thread
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-        {messages.length === 0 ? (
-          <div className="text-sm text-[var(--muted)]">
-            <div className="mb-3">
-              {disabled
-                ? "Submit two YouTube URLs above to start."
-                : "Ask anything about the two videos. Try one of these:"}
-            </div>
-            {!disabled && (
-              <div className="flex flex-col gap-1">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => onSend(s)}
-                    className="text-left text-xs text-[var(--accent)] hover:underline"
-                  >
-                    → {s}
-                  </button>
-                ))}
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {isEmpty ? (
+          <div className="h-full flex flex-col items-center justify-center gap-5 py-8">
+            {disabled ? (
+              <div className="text-center space-y-2">
+                <div className="text-4xl">🎬</div>
+                <div className="text-sm font-medium text-[var(--fg)]">
+                  Paste two YouTube URLs above
+                </div>
+                <div className="text-xs text-[var(--muted)] max-w-xs">
+                  Compare any two videos. Find out what made one outperform the other — with timestamps.
+                </div>
               </div>
+            ) : (
+              <>
+                <div className="text-center space-y-1">
+                  <div className="text-3xl">✨</div>
+                  <div className="text-sm font-semibold text-[var(--fg)]">
+                    Videos loaded. Start your analysis.
+                  </div>
+                  <div className="text-xs text-[var(--muted)]">
+                    Ask anything — I'll cite exact timestamps.
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s.text}
+                      onClick={() => onSend(s.text)}
+                      className="flex items-center gap-3 text-left text-xs bg-[var(--bg)] hover:bg-[var(--accent-soft)] border border-[var(--border)] hover:border-[rgba(249,115,22,0.3)] rounded-xl px-4 py-3 transition-all group"
+                    >
+                      <span className="text-base">{s.emoji}</span>
+                      <span className="text-[var(--fg-soft)] group-hover:text-[var(--accent)] font-medium transition-colors">
+                        {s.text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         ) : (
-          messages.map((m, i) => (
-            <ChatMessage key={i} message={m} onSeek={onSeek} />
-          ))
+          <>
+            {messages.map((m, i) => (
+              <ChatMessage key={i} message={m} onSeek={onSeek} />
+            ))}
+            {isStreaming && (
+              <div className="flex gap-1 items-center px-2 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] dot-1" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] dot-2" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] dot-3" />
+              </div>
+            )}
+          </>
         )}
       </div>
 
+      {/* Input */}
       <div className="border-t border-[var(--border)] p-4">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={
-            disabled
-              ? "Submit videos first…"
-              : "Ask anything about the two videos…"
-          }
-          disabled={disabled || isStreaming}
-          rows={2}
-          className="w-full bg-transparent border border-[var(--border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)] disabled:opacity-50 resize-none"
-        />
-        <div className="flex justify-between items-center mt-1 text-[10px] text-[var(--muted)]">
-          <span>Enter to send · Shift+Enter for newline</span>
-          {isStreaming && <span>streaming…</span>}
+        <div className="flex gap-2 items-end">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={
+              disabled
+                ? "Submit two videos to start asking…"
+                : "Ask about the videos… (Enter to send)"
+            }
+            disabled={disabled || isStreaming}
+            rows={2}
+            className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] focus:border-[var(--accent)] disabled:opacity-40 resize-none text-[var(--fg)] placeholder:text-[var(--muted-light)] transition-all"
+          />
+          <button
+            onClick={submit}
+            disabled={disabled || isStreaming || !input.trim()}
+            className="px-4 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            Send
+          </button>
+        </div>
+        <div className="mt-1.5 text-[10px] text-[var(--muted-light)]">
+          Enter to send · Shift+Enter for newline
         </div>
       </div>
     </div>

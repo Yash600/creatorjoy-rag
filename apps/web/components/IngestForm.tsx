@@ -21,29 +21,32 @@ export function IngestForm({ loading, onSubmit, errorMessage }: Props) {
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-2 w-full max-w-3xl"
-    >
+    <form onSubmit={submit} className="flex flex-col gap-2 w-full max-w-3xl">
       <div className="flex gap-2 items-center flex-1">
-        <input
-          value={urlA}
-          onChange={(e) => setUrlA(e.target.value)}
-          placeholder="Video A — youtube.com/watch?v=…"
-          disabled={loading}
-          className="flex-1 min-w-0 bg-transparent border border-[var(--border)] rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
-        />
-        <input
-          value={urlB}
-          onChange={(e) => setUrlB(e.target.value)}
-          placeholder="Video B — youtube.com/watch?v=…"
-          disabled={loading}
-          className="flex-1 min-w-0 bg-transparent border border-[var(--border)] rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
-        />
+        <div className="relative flex-1 min-w-0">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold tracking-widest text-[var(--accent)] select-none">A</span>
+          <input
+            value={urlA}
+            onChange={(e) => setUrlA(e.target.value)}
+            placeholder="youtube.com/watch?v=…"
+            disabled={loading}
+            className="w-full bg-white border border-[var(--border)] rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] focus:border-[var(--accent)] disabled:opacity-50 disabled:bg-[var(--border-soft)] text-[var(--fg)] placeholder:text-[var(--muted-light)] transition-all"
+          />
+        </div>
+        <div className="relative flex-1 min-w-0">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold tracking-widest text-[var(--muted)] select-none">B</span>
+          <input
+            value={urlB}
+            onChange={(e) => setUrlB(e.target.value)}
+            placeholder="youtube.com/watch?v=…"
+            disabled={loading}
+            className="w-full bg-white border border-[var(--border)] rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] focus:border-[var(--accent)] disabled:opacity-50 disabled:bg-[var(--border-soft)] text-[var(--fg)] placeholder:text-[var(--muted-light)] transition-all"
+          />
+        </div>
         <button
           type="submit"
           disabled={!canSubmit}
-          className="px-4 py-2 text-sm rounded bg-[var(--accent)] text-black font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-5 py-2 text-sm rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
         >
           {loading ? "Analyzing…" : "Analyze"}
         </button>
@@ -51,9 +54,9 @@ export function IngestForm({ loading, onSubmit, errorMessage }: Props) {
       {errorMessage && (
         <div
           role="alert"
-          className="border border-red-500/40 bg-red-500/10 text-red-300 rounded px-3 py-2 text-xs font-mono leading-relaxed"
+          className="border border-red-200 bg-red-50 text-red-700 rounded-lg px-3 py-2 text-xs leading-relaxed"
         >
-          <strong className="text-red-400">Ingest failed:</strong> {errorMessage}
+          <strong className="font-semibold">Error:</strong> {errorMessage}
         </div>
       )}
     </form>

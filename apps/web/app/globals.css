@@ -3,40 +3,85 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0a;
-  --fg: #ededed;
-  --muted: #888;
-  --border: #1f1f1f;
-  --accent: #ff5e3a;
+  --bg: #FAFAF8;
+  --surface: #FFFFFF;
+  --fg: #1C1917;
+  --fg-soft: #292524;
+  --muted: #78716C;
+  --muted-light: #A8A29E;
+  --border: #E7E5E4;
+  --border-soft: #F5F5F4;
+  --accent: #F97316;
+  --accent-hover: #EA6C0A;
+  --accent-soft: #FFF7ED;
+  --accent-ring: rgba(249, 115, 22, 0.2);
 }
 
-html,
-body {
+html, body {
   background: var(--bg);
   color: var(--fg);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-/* Citation badge — clickable inline pill rendered by the chat panel */
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-light); }
+
+/* Citation pill */
 .citation {
   display: inline-flex;
   align-items: center;
-  padding: 0 6px;
+  padding: 1px 7px;
   margin: 0 2px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  border-radius: 99px;
+  font-size: 0.72rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: rgba(255, 94, 58, 0.12);
+  background: var(--accent-soft);
   color: var(--accent);
-  border: 1px solid rgba(255, 94, 58, 0.3);
+  border: 1px solid rgba(249, 115, 22, 0.25);
   cursor: pointer;
-  transition: background 0.1s;
+  transition: all 0.15s ease;
+  font-weight: 600;
+}
+.citation:hover {
+  background: rgba(249, 115, 22, 0.15);
+  border-color: var(--accent);
 }
 
-.citation:hover {
-  background: rgba(255, 94, 58, 0.22);
+/* Loading shimmer */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
 }
+.shimmer {
+  background: linear-gradient(90deg, var(--border-soft) 25%, var(--border) 50%, var(--border-soft) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite;
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
+/* Pulse ring */
+@keyframes pulseRing {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/* Typing dots */
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+.dot-1 { animation: blink 1.4s infinite 0s; }
+.dot-2 { animation: blink 1.4s infinite 0.2s; }
+.dot-3 { animation: blink 1.4s infinite 0.4s; }
