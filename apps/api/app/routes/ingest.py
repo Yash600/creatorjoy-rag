@@ -38,10 +38,11 @@ async def ingest(req: IngestRequest, request: Request) -> IngestResponse:
             # Wrap with a label so the user knows which URL broke
             return RuntimeError(f"{label}: {type(e).__name__}: {e}")
 
-    results = await asyncio.gather(
-        _safe("video A", str(req.url_a)),
-        _safe("video B", str(req.url_b)),
-    )
+    # Run sequentially (not concurrently) — Render free tier is 512 MB and
+    # two simultaneous ingest pipelines (yt-dlp + embedding) cause OOM kills.
+    result_a = await _safe("video A", str(req.url_a))
+    result_b = await _safe("video B", str(req.url_b))
+    results = [result_a, result_b]
 
     failures = [r for r in results if isinstance(r, Exception)]
     if failures:
