@@ -159,6 +159,17 @@ async def fetch_transcript(
     native = await fetch_native_captions(video_id)
     if native:
         return native, "native_captions"
+
+    # In production without a residential proxy, yt-dlp audio download is
+    # blocked by YouTube's datacenter IP detection. Fail fast with a clear
+    # message rather than a confusing yt-dlp error.
+    if not settings.apify_api_token:
+        raise RuntimeError(
+            f"Video {video_id} has no auto-generated captions. "
+            "Please try a different video that has captions enabled, "
+            "or configure APIFY_API_TOKEN for the Whisper fallback."
+        )
+
     logger.info("falling back to Whisper for %s", video_id)
     whisper = await fetch_whisper_fallback(video_id)
     return whisper, "whisper_fallback"
