@@ -220,10 +220,12 @@ def _auth_strategies() -> list[tuple[str, dict[str, Any]]]:
 
 
 def _apify_proxy_url() -> str | None:
-    """Return Apify residential proxy URL if configured."""
+    """Return Apify proxy URL if configured."""
     if not settings.apify_api_token:
         return None
-    return f"http://groups-RESIDENTIAL,country-US:{settings.apify_api_token}@proxy.apify.com:8000"
+    # 'auto' lets Apify pick the best available proxy group.
+    # Avoids special characters in the username that confuse yt-dlp's proxy parser.
+    return f"http://auto:{settings.apify_api_token}@proxy.apify.com:8000"
 
 
 _BASE_INFO_OPTS: dict[str, Any] = {

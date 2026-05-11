@@ -58,7 +58,7 @@ def _apify_proxies() -> dict | None:
     """Return a proxies dict using Apify residential IPs, or None if unconfigured."""
     if not settings.apify_api_token:
         return None
-    proxy_url = f"http://groups-RESIDENTIAL,country-US:{settings.apify_api_token}@proxy.apify.com:8000"
+    proxy_url = f"http://auto:{settings.apify_api_token}@proxy.apify.com:8000"
     return {"http": proxy_url, "https": proxy_url}
 
 
