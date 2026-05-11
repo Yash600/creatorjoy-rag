@@ -4,8 +4,8 @@
 
 A full-stack RAG system that ingests YouTube videos, indexes their transcripts with timestamp-aware chunks, and lets creators chat about hooks, engagement, and improvements with **streaming responses**, **source citations**, and **conversation memory**.
 
-**Live demo:** _coming with the Loom_
-**Walkthrough:** _coming with the Loom_
+**Live demo:** https://creatorjoy-rag.vercel.app
+**Walkthrough:** _Loom link coming with submission_
 
 ---
 
@@ -58,12 +58,22 @@ A full-stack RAG system that ingests YouTube videos, indexes their transcripts w
                   │ chunks (vec 384)   │ └──────────────┘
                   │ channels           │
                   │ chat_messages      │ ┌──────────────┐
-                  └────────────────────┘ │ yt-dlp       │
-                                         │  + strategy  │
-                                         │  chain       │
-                                         │ youtube-     │
-                                         │ transcript-  │
-                                         │ api          │
+                  └────────────────────┘ │ Transcript   │
+                                         │  cascade:    │
+                                         │ 1. yt-       │
+                                         │  transcript  │
+                                         │  -api        │
+                                         │ 2. Supadata  │
+                                         │  .ai API     │
+                                         │ 3. yt-dlp +  │
+                                         │  Whisper V3  │
+                                         └──────────────┘
+                                         ┌──────────────┐
+                                         │ Metadata:    │
+                                         │ YouTube Data │
+                                         │  API v3 →    │
+                                         │ yt-dlp       │
+                                         │  fallback    │
                                          └──────────────┘
 ```
 
@@ -73,14 +83,14 @@ A full-stack RAG system that ingests YouTube videos, indexes their transcripts w
 
 | Layer | Choice | Why this over alternatives |
 |---|---|---|
-| Frontend | Next.js 15 App Router | Required by JD; streaming SSE consumer |
+| Frontend | Next.js 16.2.6 App Router | Required by JD; streaming SSE consumer |
 | Backend | FastAPI | Async-native, clean SSE story, required by JD |
 | Orchestration | **LangGraph** (not LangChain) | Stateful memory + checkpointing is first-class. LangChain agents are deprecated in favor of LangGraph for stateful flows. |
-| Embeddings | **BGE-small-en-v1.5** (384d, local) | Free, no API key, MTEB ~62 (matches `text-embedding-3-small`), 4× smaller vectors → faster HNSW. Loaded once at FastAPI startup. |
+| Embeddings | **BGE-small-en-v1.5 via fastembed** (384d, ONNX, local) | Free, no API key, MTEB ~62 (matches `text-embedding-3-small`), 4× smaller vectors → faster HNSW. ONNX runtime uses ~80MB RAM vs ~450MB for torch. Loaded once at FastAPI startup. |
 | Vector DB | **pgvector on Neon** | One database for vectors + relational metadata + chat checkpoints. HNSW index. Atomic, joinable, free. |
 | Inference | **Groq Llama 3.3 70B Versatile** | Sub-300ms TTFT — live demo feels instant. Free tier generous enough for development and demos. |
-| Transcript | youtube-transcript-api → Groq Whisper Large V3 fallback | Free path first, paid fallback for videos without captions ($0.04/hr). |
-| Metadata | yt-dlp (no API key) | Single tool: title, channel, views, likes, comments, duration, upload_date, thumbnail. |
+| Transcript | **3-stage cascade:** youtube-transcript-api → Supadata.ai → Groq Whisper Large V3 | Free path first, residential-IP-safe API second, paid audio fallback last ($0.04/hr). |
+| Metadata | **YouTube Data API v3** (primary) → yt-dlp fallback | Official API: zero bot risk, free 10K units/day. yt-dlp only fires if quota exhausted. |
 | Hosting | Vercel + Render free tier + Neon free tier | $0 baseline. Three external API keys total. |
 
 ---
@@ -236,7 +246,7 @@ Beyond providers, production also needs:
 ### Setup
 
 ```bash
-git clone https://github.com/<you>/creatorjoy-rag.git
+git clone https://github.com/Yash600/creatorjoy-rag.git
 cd creatorjoy-rag
 
 # Install frontend deps via npm workspaces
