@@ -51,6 +51,10 @@ export function IngestForm({ loading, onSubmit, errorMessage }: Props) {
           {loading ? "Analyzing…" : "Analyze"}
         </button>
       </div>
+      <div className="flex items-center gap-1.5 text-[10px] text-[var(--muted-light)]">
+        <span>⚡</span>
+        <span>Free tier · Best with videos under 8 mins · First load ~20s, cached loads are instant</span>
+      </div>
       {errorMessage && (
         <div
           role="alert"
